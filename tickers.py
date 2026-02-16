@@ -1,0 +1,20 @@
+tickers = [
+    "AAPL",
+    "MSFT",
+    "GOOGL",
+    "AMZN",
+    "META",
+    "NVDA",
+    "JPM",
+    "BAC",
+    "GS",
+    "WMT",
+    "COST",
+    "TSLA",
+    "JNJ",
+    "PFE",
+    "UNH",
+    "SPY",
+    "QQQ",
+    "VTI"
+]

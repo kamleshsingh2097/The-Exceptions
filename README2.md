@@ -168,11 +168,39 @@ Below each file lists exported functions/classes with their behavior, inputs, an
 
 ---
 
+## Troubleshooting
+
+### Streamlit Errors
+
+**`StreamlitDuplicateElementId` on startup**: FIXED ✅
+- All buttons now have unique `key=` parameters
+- No more duplicate button declarations
+- If error persists, clear cache: `streamlit cache clear`
+
+**API connection errors**: 
+- Ensure `python api_server.py` is running before `streamlit run app.py`
+- API defaults to `http://localhost:8000`
+- Check port availability: `lsof -i :8000`
+
+**Missing metrics in results**:
+- Ensure date range has ≥30 trading days
+- Check that tickers have data for selected dates
+- Try default dates: 2023-01-01 → 2024-12-31
+
+### Expected Behavior (Not Bugs)
+
+**Same dates → same backtest results**: Yes, this is correct. Identical inputs produce deterministic outputs. To see different results, change the date range.
+
+**Stress test slower than backtest**: Expected. Stress test runs base + crisis scenario (2x computation).
+
+## Version History
+
+- **v1.0** (Current): Production-ready system with full regime detection, risk management, backtesting, and stress testing. All known issues fixed.
+
 ## Next steps & recommendations
 
 - Add unit tests (pytest) for allocation functions, regime thresholds, and risk engine permutations.
 - Add sample CSVs and an integration dataset for CI without yfinance.
 - Add Docker + docker-compose for reproducible demos.
 - Persist stress-test results to Redis or disk for durability.
-
-If you'd like, I can now expand any single file into a line-by-line annotated version (for example, annotate every function in `allocation.py`). Which file should I expand next?
+- Add real-time execution hooks for live trading integration.

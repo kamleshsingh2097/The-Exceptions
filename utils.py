@@ -1,8 +1,12 @@
-
 from datetime import datetime, time
 import pytz
 import logging
 from typing import Optional
+import json
+import os
+
+# File used to persist the selected ticker for cross-process sharing
+_SELECTION_PATH = os.path.join(os.path.dirname(__file__), "selected_ticker.json")
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -83,3 +87,30 @@ def safe_int(value, default: int = 0) -> int:
         return int(value) if value is not None else default
     except (ValueError, TypeError):
         return default
+
+
+def write_selected_ticker(ticker: str) -> None:
+    """Persist the selected ticker to a small JSON file.
+
+    This allows other processes (for example `api_server.py`) to
+    read the current selection.
+    """
+    try:
+        payload = {"ticker": str(ticker)}
+        with open(_SELECTION_PATH, "w", encoding="utf-8") as f:
+            json.dump(payload, f)
+    except Exception:
+        logger.exception("Failed to write selected ticker")
+
+
+def read_selected_ticker() -> Optional[str]:
+    """Read the persisted selected ticker (or return None)."""
+    try:
+        if not os.path.exists(_SELECTION_PATH):
+            return None
+        with open(_SELECTION_PATH, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+            return payload.get("ticker")
+    except Exception:
+        logger.exception("Failed to read selected ticker")
+        return None

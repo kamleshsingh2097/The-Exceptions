@@ -13,7 +13,9 @@ import traceback
 import pandas as pd
 import numpy as np
 import logging
-
+import uvicorn
+from utils import read_selected_ticker
+from tickers import tickers as TICKERS
 from data_loader import load_prices
 from feature_engineering import rolling_features
 from backtester import run_backtest
@@ -32,8 +34,23 @@ app = FastAPI(
 )
 
 # In-memory store for background stress test tasks
+# Auto-cleanup: keep only last 100 tasks
 stress_tasks: Dict[str, Dict[str, Any]] = {}
+MAX_STRESS_TASKS = 100
 
+def get_effective_tickers(default_count: int = 3):
+    """Return the user-selected ticker (as a single-item list) or a sensible default.
+
+    Prefers the persisted selection written by the Streamlit app. Falls back
+    to the first `default_count` tickers defined in `tickers.py`.
+    """
+    sel = read_selected_ticker()
+    if sel:
+        return [sel]
+    try:
+        return TICKERS[:default_count]
+    except Exception:
+        return ['AAPL', 'MSFT', 'GOOGL']
 
 def sanitize(obj):
     # pandas DataFrame
@@ -101,6 +118,37 @@ async def health_check():
         "version": "1.0"
     }
 
+@app.get("/data-range")
+async def get_data_range():
+    """Get available date range for backtesting"""
+    try:
+        # Load sample data to determine available date range
+        prices = load_prices(
+            tickers=get_effective_tickers(),
+            start_date='2020-01-01',
+            end_date='2030-12-31'
+        )
+        
+        if prices.empty:
+            return {
+                "status": "no_data",
+                "message": "No price data available"
+            }
+        
+        return {
+            "status": "success",
+            "start_date": prices.index[0].strftime('%Y-%m-%d'),
+            "end_date": prices.index[-1].strftime('%Y-%m-%d'),
+            "total_trading_days": len(prices),
+            "message": f"Data available from {prices.index[0].strftime('%Y-%m-%d')} to {prices.index[-1].strftime('%Y-%m-%d')}"
+        }
+    except Exception as e:
+        logger.error(f"Data range error: {str(e)}")
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
 @app.post("/backtest", response_model=BacktestResponse)
 async def run_portfolio_backtest(request: BacktestRequest):
     """
@@ -109,11 +157,15 @@ async def run_portfolio_backtest(request: BacktestRequest):
     try:
         logger.info("Starting backtest...")
         
+        # Determine date range from request (fallback to sensible defaults)
+        start_date = request.start_date or '2023-01-01'
+        end_date = request.end_date or '2024-12-31'
+
         # Load market data
         prices = load_prices(
-            tickers=['AAPL', 'MSFT', 'GOOGL'],
-            start_date='2023-01-01',
-            end_date='2024-12-31'
+            tickers=get_effective_tickers(),
+            start_date=start_date,
+            end_date=end_date
         )
         features, _ = rolling_features(prices)
         
@@ -152,25 +204,41 @@ async def run_portfolio_backtest(request: BacktestRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/stress-test")
-async def stress_test_portfolio(background_tasks: BackgroundTasks):
+async def stress_test_portfolio(background_tasks: BackgroundTasks, 
+                                 start_date: Optional[str] = None,
+                                 end_date: Optional[str] = None):
     """
     Run comprehensive stress test with crisis scenarios
+    Accepts optional date range, defaults to wide historical range
     """
     try:
         logger.info("Scheduling background stress test task")
+        
+        # Use provided dates or defaults
+        test_start = start_date or '2020-01-01'
+        test_end = end_date or '2024-12-31'
+        
+        logger.info(f"Stress test parameters: dates={test_start} to {test_end}")
 
         # create a task id and register initial status
         task_id = uuid.uuid4().hex
-        stress_tasks[task_id] = {"status": "running", "result": None}
+        stress_tasks[task_id] = {"status": "running", "result": None, "created_at": str(pd.Timestamp.now())}
+        
+        # Cleanup old tasks if too many
+        if len(stress_tasks) > MAX_STRESS_TASKS:
+            oldest_key = min(stress_tasks.keys(), key=lambda k: stress_tasks[k].get('created_at', ''))
+            del stress_tasks[oldest_key]
+            logger.info(f"Cleaned up old stress test task: {oldest_key}")
 
         # Background worker that loads data, runs the stress test and stores sanitized result
-        def run_and_store(tid: str, target_vol: float, drawdown_limit: float, defensive_asset: str):
+        def run_and_store(tid: str, target_vol: float, drawdown_limit: float, defensive_asset: str, dt_start: str, dt_end: str):
             try:
-                logger.info(f"Background task {tid} started")
+                logger.info(f"Background task {tid} started with dates {dt_start} to {dt_end}")
+                # Use provided date range for stress tests
                 prices = load_prices(
-                    tickers=['AAPL', 'MSFT', 'GOOGL'],
-                    start_date='2023-01-01',
-                    end_date='2024-12-31'
+                    tickers=get_effective_tickers(),
+                    start_date=dt_start,
+                    end_date=dt_end
                 )
                 features, _ = rolling_features(prices)
 
@@ -199,8 +267,8 @@ async def stress_test_portfolio(background_tasks: BackgroundTasks):
                 stress_tasks[tid]["status"] = "failed"
                 stress_tasks[tid]["result"] = {"error": str(tb)}
 
-        # schedule background task
-        background_tasks.add_task(run_and_store, task_id, 0.08, -0.15, 'DEFENSIVE')
+        # schedule background task with provided dates
+        background_tasks.add_task(run_and_store, task_id, 0.08, -0.15, 'DEFENSIVE', test_start, test_end)
 
         return JSONResponse(content=jsonable_encoder({"status": "started", "task_id": task_id}))
     except Exception as e:
@@ -215,16 +283,50 @@ async def stress_test_portfolio(background_tasks: BackgroundTasks):
 @app.post("/regime-analysis", response_model=RegimeAnalysisResponse)
 async def analyze_regime(request: RegimeAnalysisRequest):
     """
-    Analyze current market regime
+    Analyze current market regime for a given date.
+    Uses available historical data up to the analysis date.
     """
     try:
         logger.info("Analyzing market regime...")
         
+        # Parse analysis date
+        analysis_date = request.analysis_date or '2024-12-31'
+        try:
+            analysis_dt = pd.to_datetime(analysis_date)
+        except Exception:
+            raise HTTPException(status_code=400, detail=f"Invalid date format: {analysis_date}. Use YYYY-MM-DD")
+        
+        # Try to load data - start with a wide range to find what's available
+        # Go back 2 years to have plenty of historical data
+        from datetime import timedelta
+        start_dt = analysis_dt - timedelta(days=730)
+        start_date = start_dt.strftime('%Y-%m-%d')
+        end_date = analysis_dt.strftime('%Y-%m-%d')
+        
+        logger.info(f"Attempting to load regime data from {start_date} to {end_date}")
+        
+        # Load data - this will get whatever data is available
         prices = load_prices(
-            tickers=['AAPL', 'MSFT', 'GOOGL'],
-            start_date='2023-01-01',
-            end_date='2024-12-31'
+            tickers=get_effective_tickers(),
+            start_date=start_date,
+            end_date=end_date
         )
+        
+        # Validate we have sufficient data
+        if prices.empty:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"No price data available for {end_date}. Try dates between 2023-01-01 and available market dates."
+            )
+        
+        if len(prices) < 30:  # Need minimum 30 trading days
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient data for regime analysis. Got {len(prices)} trading days, need at least 30. Try dates closer to available data."
+            )
+        
+        logger.info(f"Loaded {len(prices)} trading days. Analysis date {end_date}, data range: {prices.index[0].strftime('%Y-%m-%d')} to {prices.index[-1].strftime('%Y-%m-%d')}")
+        
         features, _ = rolling_features(prices)
         
         detector = RegimeDetector()
@@ -243,16 +345,18 @@ async def analyze_regime(request: RegimeAnalysisRequest):
             drawdown=float(indicators.get('drawdown', 0.0)),
             recommendations=characteristics
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Regime analysis error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 @app.get("/metrics")
 async def get_last_metrics():
     """Get last computed performance metrics"""
     try:
         prices = load_prices(
-            tickers=['AAPL', 'MSFT', 'GOOGL'],
+            tickers=get_effective_tickers(),
             start_date='2023-01-01',
             end_date='2024-12-31'
         )
@@ -277,5 +381,4 @@ async def get_stress_test_status(task_id: str):
     return JSONResponse(content=jsonable_encoder(task))
 
 if __name__ == "__main__":
-    import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
