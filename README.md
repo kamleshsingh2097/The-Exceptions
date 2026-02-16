@@ -211,3 +211,7 @@ Purpose: <b>Validate crash resilience and capital protection capability.</b>
 [The_Exceptions.pptx](https://github.com/user-attachments/files/25332243/The_Exceptions.pptx)
 
 
+https://github.com/user-attachments/assets/61d05b13-2ee9-4040-8bc4-9b4ba8a27319
+
+
+
