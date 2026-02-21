@@ -7,10 +7,10 @@ from typing import List, Dict, Any, Optional
 import pandas as pd
 import numpy as np
 
-from allocation import risk_parity_weights, adjust_for_regime
-from risk_engine import volatility_targeting, drawdown_protection, stop_loss_logic, comprehensive_risk_management
-from metrics import compute_performance
-from regime_detection import RegimeDetector, MarketRegime
+from backend.allocation import risk_parity_weights, adjust_for_regime
+from backend.risk_engine import volatility_targeting, drawdown_protection, stop_loss_logic, comprehensive_risk_management
+from backend.metrics import compute_performance
+from backend.regime_detection import RegimeDetector, MarketRegime
 
 def walk_forward_validation(prices: pd.DataFrame,
                           features: pd.DataFrame,

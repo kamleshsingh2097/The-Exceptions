@@ -14,7 +14,7 @@ import pandas as pd
 import numpy as np
 import logging
 
-from backtester import run_backtest
+from backend.backtester import run_backtest
 
 
 # ---------------------------------------------------------
@@ -160,7 +160,7 @@ def run_comprehensive_stress_test(
     logger.info(f"Base: Return={base_return:.2%}, MaxDD={base_dd:.2%}")
 
     # Import here to avoid circular imports
-    from feature_engineering import rolling_features
+    from backend.feature_engineering import rolling_features
 
     # ===============================
     # CRISIS SCENARIO

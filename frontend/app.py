@@ -4,8 +4,14 @@ Interactive dashboard for backtesting, analysis, and stress testing
 CONNECTED TO BACKEND VIA REST API
 """
 
-from tickers import tickers
-from utils import write_selected_ticker, read_selected_ticker
+# when the UI lives in a subfolder we need the workspace root on PYTHONPATH
+import os, sys
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if ROOT not in sys.path:
+    sys.path.append(ROOT)
+
+from backend.tickers import tickers
+from backend.utils import write_selected_ticker, read_selected_ticker
 import streamlit as st
 import pandas as pd
 import numpy as np

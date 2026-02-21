@@ -3,6 +3,20 @@ FastAPI Server for Risk Management & Regime Detection Engine
 Exposes endpoints for backtesting, stress testing, and regime analysis
 """
 
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
@@ -14,14 +28,15 @@ import pandas as pd
 import numpy as np
 import logging
 import uvicorn
-from utils import read_selected_ticker
-from tickers import tickers as TICKERS
-from data_loader import load_prices
-from feature_engineering import rolling_features
-from backtester import run_backtest
-from stress_test import run_comprehensive_stress_test
-from metrics import compute_performance
-from regime_detection import RegimeDetector
+# imports refer to backend package when running via uvicorn from workspace root
+from backend.utils import read_selected_ticker
+from backend.tickers import tickers as TICKERS
+from backend.data_loader import load_prices
+from backend.feature_engineering import rolling_features
+from backend.backtester import run_backtest
+from backend.stress_test import run_comprehensive_stress_test
+from backend.metrics import compute_performance
+from backend.regime_detection import RegimeDetector
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -336,12 +351,13 @@ async def analyze_regime(request: RegimeAnalysisRequest):
         
         characteristics = detector.get_regime_characteristics(regime)
         
-        logger.info(f"Regime detected: {regime.value}")
+        logger.info(f"Regime detected: {regime.value}, strength {indicators.get('trend_strength', 0.0):.3f}")
         
         return RegimeAnalysisResponse(
             current_regime=regime.value,
             volatility=float(indicators.get('avg_volatility', 0.0)),
-            trend_strength=float(indicators.get('trend_direction', 0.0)),
+            # previously returned trend_direction by mistake; clients expect trend_strength
+            trend_strength=float(indicators.get('trend_strength', 0.0)),
             drawdown=float(indicators.get('drawdown', 0.0)),
             recommendations=characteristics
         )
