@@ -48,6 +48,13 @@ app = FastAPI(
     description="Advanced portfolio backtesting with regime detection and risk controls",
     version="1.0"
 )
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/")
+def root():
+    return {"message": "Risk Management Engine API is live!"}
 
 # In-memory store for background stress test tasks
 # Auto-cleanup: keep only last 100 tasks
