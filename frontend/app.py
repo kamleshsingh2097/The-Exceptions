@@ -23,7 +23,7 @@ import requests
 from typing import Dict, Any
 
 # API Configuration
-API_BASE_URL = "https://the-exceptions.onrender.com/predict"
+API_BASE_URL = "https://the-exceptions.onrender.com"
 
 def call_api(endpoint: str, method: str = "GET", data: Dict[str, Any] = None) -> Dict[str, Any]:
     """Helper function to call API endpoints - always fetches fresh data"""
