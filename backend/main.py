@@ -31,15 +31,14 @@ import numpy as np
 import logging
 import uvicorn
 # imports refer to backend package when running via uvicorn from workspace root
-from backend.utils import read_selected_ticker
-from backend.tickers import tickers as TICKERS
-from backend.data_loader import load_prices
-from backend.feature_engineering import rolling_features
-from backend.backtester import run_backtest
-from backend.stress_test import run_comprehensive_stress_test
-from backend.metrics import compute_performance
-from backend.regime_detection import RegimeDetector
-
+from .utils import read_selected_ticker
+from .tickers import tickers as TICKERS
+from .data_loader import load_prices
+from .feature_engineering import rolling_features
+from .backtester import run_backtest
+from .stress_test import run_comprehensive_stress_test
+from .metrics import compute_performance
+from .regime_detection import RegimeDetector
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
