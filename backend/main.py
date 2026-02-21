@@ -16,7 +16,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
+@app.get("/")
+def home():
+    return {"message": "Backend Running"}
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
